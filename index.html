@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo de Funções de Primeiro Grau</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos básicos para o corpo */
+        body {
+            margin: 0;
+            overflow: hidden; /* Esconde barras de rolagem */
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Fundo escuro */
+            color: #e2e8f0; /* Texto claro */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        /* Estilos para o container principal */
+        .game-container {
+            background-color: #2d3748; /* Fundo do container */
+            border-radius: 1rem; /* Cantos arredondados */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Sombra suave */
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px; /* Largura máxima para desktop */
+            margin-bottom: 1rem;
+        }
+        /* Estilos para o canvas */
+        canvas {
+            background-color: #1a202c; /* Fundo do gráfico */
+            border-radius: 0.75rem; /* Cantos arredondados */
+            border: 2px solid #4a90e2; /* Borda azul */
+            touch-action: none; /* Previne o comportamento padrão do navegador em eventos de toque */
+            width: 100%; /* Ocupa a largura total do container */
+            height: 400px; /* Altura fixa para o gráfico */
+            max-height: 70vh; /* Limita a altura em telas menores */
+        }
+        /* Estilos para botões */
+        .button {
+            padding: 0.75rem 1.5rem;
+            background-color: #4a90e2; /* Azul vibrante */
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .button:hover {
+            background-color: #357bd8; /* Azul mais escuro ao passar o mouse */
+            transform: translateY(-2px);
+        }
+        .button:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        .button:disabled {
+            background-color: #6b7280;
+            cursor: not-allowed;
+        }
+        /* Estilos para a caixa de mensagem */
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #2d3748;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            z-index: 1000;
+            display: none; /* Escondido por padrão */
+            flex-direction: column;
+            gap: 1rem;
+            max-width: 90%;
+        }
+        .message-box p {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+        .message-box button {
+            background-color: #4a90e2;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: background-color 0.3s ease;
+        }
+        .message-box button:hover {
+            background-color: #357bd8;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="text-3xl font-bold mb-4 text-center">Adivinhe a Função!</h1>
+        <div class="text-xl mb-4 text-center">
+            <p id="functionDisplay">Função: $y = mx + b$</p>
+            <p id="targetXDisplay">X: $?$</p>
+        </div>
+        <div class="flex justify-between w-full mb-4 px-2">
+            <p class="text-lg">Pontuação: <span id="scoreDisplay">0</span></p>
+            <p class="text-lg">Rodada: <span id="roundDisplay">0</span> / <span id="totalRounds">5</span></p>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <button id="startButton" class="button mt-6">Iniciar Jogo</button>
+    </div>
+
+    <!-- Caixa de Mensagem Customizada -->
+    <div id="messageBox" class="message-box">
+        <p id="messageText"></p>
+        <button id="messageBoxCloseButton">OK</button>
+    </div>
+
+    <script>
+        // Referências ao DOM
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const functionDisplay = document.getElementById('functionDisplay');
+        const targetXDisplay = document.getElementById('targetXDisplay');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const roundDisplay = document.getElementById('roundDisplay');
+        const totalRoundsDisplay = document.getElementById('totalRounds');
+        const startButton = document.getElementById('startButton');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const messageBoxCloseButton = document.getElementById('messageBoxCloseButton');
+
+        // Variáveis do jogo
+        let score = 0;
+        let currentRound = 0;
+        const totalRounds = 5; // Número de rodadas por jogo
+        let m, b, targetX, correctY; // Parâmetros da função e X, Y corretos
+        let gameActive = false;
+        let userShotY = null; // Onde o usuário clicou (será arredondado para inteiro)
+        let animationFrameId; // Para controlar o loop de animação
+
+        // Configurações do gráfico
+        const xMin = -10;
+        const xMax = 10;
+        const yMin = -10;
+        const yMax = 10;
+        const gridSize = 1; // Espaçamento da grade
+        const pointRadius = 6; // Raio dos pontos no gráfico
+        // Tolerância para acerto:
+        // <= 0.5 significa que o Math.round do userShotY é exatamente o correctY
+        // <= 1.5 significa que o Math.round do userShotY é correctY ou correctY +/- 1
+        const tolerancePerfect = 0.5;
+        const toleranceClose = 1.5;
+
+        // Função para mostrar a caixa de mensagem customizada
+        function showMessageBox(message) {
+            messageText.textContent = message;
+            messageBox.style.display = 'flex';
+        }
+
+        // Função para esconder a caixa de mensagem customizada
+        function hideMessageBox() {
+            messageBox.style.display = 'none';
+        }
+
+        // Converte coordenadas matemáticas para coordenadas do canvas
+        function mathToCanvas(x, y) {
+            const canvasX = (x - xMin) / (xMax - xMin) * canvas.width;
+            const canvasY = canvas.height - ((y - yMin) / (yMax - yMin) * canvas.height); // Y invertido para o canvas
+            return { x: canvasX, y: canvasY };
+        }
+
+        // Converte coordenadas do canvas para coordenadas matemáticas
+        function canvasToMath(px, py) {
+            const mathX = (px / canvas.width) * (xMax - xMin) + xMin;
+            const mathY = ((canvas.height - py) / canvas.height) * (yMax - yMin) + yMin;
+            return { x: mathX, y: mathY };
+        }
+
+        // Desenha o gráfico
+        function drawGraph() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Limpa o canvas
+
+            // Desenha a grade
+            ctx.strokeStyle = '#374151'; // Cor da grade
+            ctx.lineWidth = 0.5;
+
+            for (let x = xMin; x <= xMax; x += gridSize) {
+                const { x: px } = mathToCanvas(x, 0);
+                ctx.beginPath();
+                ctx.moveTo(px, 0);
+                ctx.lineTo(px, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = yMin; y <= yMax; y += gridSize) {
+                const { y: py } = mathToCanvas(0, y);
+                ctx.beginPath();
+                ctx.moveTo(0, py);
+                ctx.lineTo(canvas.width, py);
+                ctx.stroke();
+            }
+
+            // Desenha os eixos X e Y
+            ctx.strokeStyle = '#e2e8f0'; // Cor dos eixos
+            ctx.lineWidth = 2;
+
+            const { x: originX, y: originY } = mathToCanvas(0, 0);
+            ctx.beginPath();
+            ctx.moveTo(0, originY); // Eixo X
+            ctx.lineTo(canvas.width, originY);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.moveTo(originX, 0); // Eixo Y
+            ctx.lineTo(originX, canvas.height);
+            ctx.stroke();
+
+            // Desenha os números nos eixos
+            ctx.fillStyle = '#e2e8f0';
+            ctx.font = '12px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            for (let x = xMin; x <= xMax; x += gridSize) {
+                if (x !== 0) {
+                    const { x: px } = mathToCanvas(x, 0);
+                    ctx.fillText(x, px, originY + 5);
+                }
+            }
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let y = yMin; y <= yMax; y += gridSize) {
+                if (y !== 0) {
+                    const { y: py } = mathToCanvas(0, y);
+                    ctx.fillText(y, originX - 5, py);
+                }
+            }
+        }
+
+        // Desenha a linha da função
+        function drawFunctionLine() {
+            ctx.strokeStyle = '#4a90e2'; // Azul
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+
+            const startPoint = mathToCanvas(xMin, m * xMin + b);
+            ctx.moveTo(startPoint.x, startPoint.y);
+
+            for (let x = xMin; x <= xMax; x += 0.1) { // Desenha com pequenos passos para suavizar a linha
+                const y = m * x + b;
+                const { x: px, y: py } = mathToCanvas(x, y);
+                ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+        }
+
+        // Desenha o ponto correto no gráfico
+        function drawCorrectPoint() {
+            const { x: pxCorrect, y: pyCorrect } = mathToCanvas(targetX, correctY);
+            ctx.fillStyle = '#10b981'; // Verde
+            ctx.beginPath();
+            ctx.arc(pxCorrect, pyCorrect, pointRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Desenha o ponto onde o usuário clicou (arredondado para inteiro)
+        function drawUserShot() {
+            if (userShotY !== null) {
+                const { x: pxUserShot, y: pyUserShot } = mathToCanvas(targetX, userShotY);
+                ctx.fillStyle = '#ef4444'; // Vermelho
+                ctx.beginPath();
+                ctx.arc(pxUserShot, pyUserShot, pointRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Gera uma nova função de primeiro grau e um X, usando apenas inteiros
+        function generateNewRound() {
+            // Gera m (slope) entre -3 e 3, evitando 0
+            m = Math.floor(Math.random() * 7) - 3; // Gera de -3 a 3
+            if (m === 0) m = Math.random() < 0.5 ? 1 : -1; // Garante que m não seja 0
+
+            // Gera b (y-intercept) entre -7 e 7
+            b = Math.floor(Math.random() * 15) - 7; // Gera de -7 a 7
+
+            // Gera targetX entre -8 e 8 (para garantir que esteja visível no gráfico)
+            targetX = Math.floor(Math.random() * 17) - 8; // Gera de -8 a 8
+
+            // Calcula o Y correto para o X (será um inteiro)
+            correctY = m * targetX + b;
+
+            // Garante que o correctY esteja dentro dos limites do gráfico para melhor jogabilidade
+            // Se estiver fora, tenta gerar novamente (simples, mas pode ser melhorado para garantir sempre um valor)
+            let attempts = 0;
+            while ((correctY < yMin || correctY > yMax) && attempts < 10) {
+                m = Math.floor(Math.random() * 7) - 3;
+                if (m === 0) m = Math.random() < 0.5 ? 1 : -1;
+                b = Math.floor(Math.random() * 15) - 7;
+                targetX = Math.floor(Math.random() * 17) - 8;
+                correctY = m * targetX + b;
+                attempts++;
+            }
+
+
+            // Atualiza a exibição da função e do X
+            functionDisplay.textContent = `Função: y = ${m}x ${b >= 0 ? '+' : '-'} ${Math.abs(b)}`;
+            targetXDisplay.textContent = `X: ${targetX}`; // Alterado de 'Alvo: x = ' para 'X: '
+
+            userShotY = null; // Reseta o tiro do usuário
+            drawGame(); // Redesenha o jogo
+        }
+
+        // Função principal de desenho do jogo
+        function drawGame() {
+            drawGraph();
+            if (gameActive) {
+                drawFunctionLine();
+                if (userShotY !== null) {
+                    drawCorrectPoint(); // Mostra o ponto correto após o tiro
+                    drawUserShot();
+                }
+            } else {
+                // Desenha apenas o gráfico base quando o jogo não está ativo
+            }
+        }
+
+        // Inicia o jogo
+        function startGame() {
+            score = 0;
+            currentRound = 0;
+            gameActive = true;
+            startButton.textContent = 'Próxima Rodada';
+            startButton.disabled = true; // Desabilita o botão até o tiro ser dado
+            scoreDisplay.textContent = score;
+            totalRoundsDisplay.textContent = totalRounds;
+            nextRound(); // Inicia a primeira rodada
+        }
+
+        // Avança para a próxima rodada
+        function nextRound() {
+            currentRound++;
+            if (currentRound > totalRounds) {
+                endGame();
+                return;
+            }
+            roundDisplay.textContent = currentRound;
+            generateNewRound();
+            startButton.disabled = true; // Garante que o botão esteja desabilitado no início da rodada
+        }
+
+        // Finaliza o jogo
+        function endGame() {
+            gameActive = false;
+            startButton.textContent = 'Jogar Novamente';
+            startButton.disabled = false;
+            let message = `Jogo finalizado! Sua pontuação final: ${score} de ${totalRounds * 100}.`;
+            if (score >= totalRounds * 80) {
+                message += " Excelente trabalho!";
+            } else if (score >= totalRounds * 50) {
+                message += " Bom trabalho!";
+            } else {
+                message += " Tente novamente para melhorar!";
+            }
+            showMessageBox(message);
+        }
+
+        // Lida com o clique/toque no canvas
+        function handleCanvasClick(event) {
+            if (!gameActive || userShotY !== null) return; // Não permite múltiplos cliques na mesma rodada
+
+            const rect = canvas.getBoundingClientRect();
+            let clientY;
+
+            if (event.type === 'mousedown') {
+                clientY = event.clientY;
+            } else if (event.type === 'touchstart') {
+                clientY = event.touches[0].clientY;
+            } else {
+                return; // Tipo de evento não suportado
+            }
+
+            const canvasY = clientY - rect.top;
+            const { y: mathY } = canvasToMath(0, canvasY); // Convertemos apenas o Y
+
+            userShotY = Math.round(mathY); // Arredonda o Y do clique para o inteiro mais próximo
+
+            // Calcula a diferença e a pontuação
+            const difference = Math.abs(userShotY - correctY);
+            let roundScore = 0;
+            if (difference <= tolerancePerfect) { // Acerto exato ou muito próximo (arredondado)
+                roundScore = 100; // Acerto perfeito
+            } else if (difference <= toleranceClose) { // Erro de 1 unidade (arredondado)
+                roundScore = 50;
+            } else {
+                roundScore = 0;
+            }
+            score += roundScore;
+            scoreDisplay.textContent = score;
+
+            drawGame(); // Redesenha para mostrar o tiro e o ponto correto
+
+            // Exibe feedback e prepara para a próxima rodada
+            let feedbackMessage = `Você clicou em y = ${userShotY}. O valor correto era y = ${correctY}.`;
+            if (roundScore > 0) {
+                feedbackMessage += ` Você ganhou ${roundScore} pontos!`;
+            } else {
+                feedbackMessage += ` Você errou.`;
+            }
+            showMessageBox(feedbackMessage);
+            startButton.disabled = false; // Habilita o botão para a próxima rodada
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', () => {
+            if (gameActive) {
+                hideMessageBox(); // Esconde a mensagem antes de ir para a próxima rodada
+                nextRound();
+            } else {
+                startGame();
+            }
+        });
+        messageBoxCloseButton.addEventListener('click', hideMessageBox);
+
+        canvas.addEventListener('mousedown', handleCanvasClick);
+        canvas.addEventListener('touchstart', handleCanvasClick, { passive: false }); // Previne o scroll em touch
+
+        // Redimensiona o canvas quando a janela é redimensionada
+        function onWindowResize() {
+            // Ajusta a largura do canvas para ser responsiva
+            const containerWidth = canvas.parentElement.clientWidth;
+            canvas.width = containerWidth;
+            canvas.height = 400; // Mantém a altura fixa ou ajusta proporcionalmente
+
+            drawGame(); // Redesenha o jogo com as novas dimensões
+        }
+
+        // Inicialização
+        window.onload = function () {
+            onWindowResize(); // Define o tamanho inicial do canvas
+            drawGame(); // Desenha o estado inicial do gráfico
+            showMessageBox("Bem-vindo ao Jogo de Funções de Primeiro Grau! Clique em 'Iniciar Jogo' para começar.");
+        };
+
+        window.addEventListener('resize', onWindowResize);
+    </script>
+</body>
+</html>
+
